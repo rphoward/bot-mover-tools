@@ -17,6 +17,12 @@ Never writes anywhere except WORKDIR. Never follows symlinks for writing.
 import argparse, hashlib, json, os, re, sys, datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bot-mover-package-and-verify"))
+try:
+    import secret_scan  # the one secret-file rule, shared with package.py and verify.py
+except ImportError as e:  # never fall back to a weaker check: a missed secret would ship
+    sys.exit(f"scan_deps: cannot load secret_scan.py from ../bot-mover-package-and-verify ({e}); run bot-mover-tools first")
+
 DB_EXT = {".db", ".sqlite", ".sqlite3", ".duckdb", ".faiss", ".index", ".ann", ".hnsw", ".lance", ".npy", ".npz", ".parquet", ".pkl"}
 MODEL_EXT = {".onnx", ".safetensors", ".gguf", ".ggml", ".pt", ".pth", ".ckpt", ".h5", ".tflite", ".mlmodel"}
 TEXT_EXT = {".md", ".txt", ".py", ".sh", ".ps1", ".json", ".yaml", ".yml", ".toml", ".cfg", ".ini", ".js", ".ts", ".csv", ".sql", ".html", ""}
@@ -53,13 +59,7 @@ def classify(path, private_bot, data_root, skills_root):
         if s.startswith(r.rstrip("/") + "/"):
             s = s[len(r.rstrip("/")) + 1:]
             break
-    secret = False
-    try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bot-mover-package-and-verify"))
-        import secret_scan
-        secret = secret_scan.is_secret_file(s)
-    except Exception:
-        secret = bool(re.search(r"(^|/)\.env$|\.pem$|id_rsa", s))
+    secret = secret_scan.is_secret_file(s)
     ext = Path(s).suffix.lower()
     kind, cls, reason, status_hint = "source", "shared", None, None
     if secret:
